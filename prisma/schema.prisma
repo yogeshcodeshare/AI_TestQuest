@@ -307,7 +307,7 @@ model UserTrackProgress {
 
 model Streak {
   id          String   @id @default(cuid())
-  userId      String
+  userId      String   @unique
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   currentStreak   Int @default(0)

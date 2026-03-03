@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { XpReason, SubmissionResult } from '@prisma/client'
+import { XpReason, SubmissionResult, Badge } from '@prisma/client'
 import { XP, STREAK } from '@/lib/constants'
 
 export async function awardXp(
@@ -143,7 +143,7 @@ export async function updateStreak(userId: string, xpEarned: number) {
 }
 
 export async function checkAndAwardBadges(userId: string) {
-  const awardedBadges = []
+  const awardedBadges: Badge[] = []
 
   // Get user's stats
   const [profile, streak, submissionCount] = await Promise.all([

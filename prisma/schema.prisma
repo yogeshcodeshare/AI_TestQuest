@@ -212,6 +212,7 @@ model DailyTask {
   status      DailyTaskStatus @default(PENDING)
   
   submissionId String?
+  submission  Submission? @relation(fields: [submissionId], references: [id])
 
   @@map("daily_tasks")
 }

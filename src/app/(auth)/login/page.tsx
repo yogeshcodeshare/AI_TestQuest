@@ -23,6 +23,14 @@ export default function LoginPage() {
     setError('')
 
     try {
+      // Check if environment variables are available
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration missing. Please check environment variables.')
+      }
+
       const supabase = createClient()
       const { error } = await supabase.auth.signInWithOtp({
         email,
@@ -34,9 +42,9 @@ export default function LoginPage() {
       if (error) throw error
 
       setIsSent(true)
-    } catch (err) {
-      setError('Something went wrong. Please try again.')
-      console.error(err)
+    } catch (err: any) {
+      console.error('Login error:', err)
+      setError(err?.message || 'Something went wrong. Please try again.')
     } finally {
       setIsLoading(false)
     }

@@ -94,6 +94,7 @@ model Track {
   // Relations
   modules     Module[]
   tasks       Task[]
+  trackProgress UserTrackProgress[]
 
   @@map("tracks")
 }
@@ -285,6 +286,7 @@ model UserTrackProgress {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   trackId     String
+  track       Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
   
   // Progress
   completedModules String[] // module IDs

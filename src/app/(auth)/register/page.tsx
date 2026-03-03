@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Zap, Eye, EyeOff, ArrowRight, Loader2, CheckCircle } from 'lucide-react'
@@ -49,6 +49,8 @@ export default function RegisterPage() {
     return true
   }
 
+  const [isRedirecting, setIsRedirecting] = useState(false)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -80,6 +82,8 @@ export default function RegisterPage() {
 
       if (data.user) {
         setIsSuccess(true)
+        setIsRedirecting(true)
+        
         // Auto sign in after registration
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -87,8 +91,14 @@ export default function RegisterPage() {
         })
         
         if (!signInError) {
-          router.push('/onboarding')
-          router.refresh()
+          // Small delay to show success message
+          setTimeout(() => {
+            router.push('/onboarding')
+            router.refresh()
+          }, 1500)
+        } else {
+          console.error('Auto sign-in failed:', signInError)
+          setIsRedirecting(false)
         }
       }
     } catch (err: any) {
@@ -98,6 +108,16 @@ export default function RegisterPage() {
       setIsLoading(false)
     }
   }
+
+  // Fallback: redirect manually after 3 seconds if auto-redirect fails
+  useEffect(() => {
+    if (isSuccess && !isRedirecting) {
+      const timer = setTimeout(() => {
+        window.location.href = '/onboarding'
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [isSuccess, isRedirecting])
 
   if (isSuccess) {
     return (
@@ -113,9 +133,18 @@ export default function RegisterPage() {
                 Welcome, <strong>{name}</strong>!
               </p>
               <p className="text-sm text-muted-foreground mt-4">
-                Redirecting you to onboarding...
+                {isRedirecting ? 'Redirecting you to onboarding...' : 'Click below to continue'}
               </p>
             </div>
+            {!isRedirecting && (
+              <Button 
+                onClick={() => window.location.href = '/onboarding'}
+                className="mt-4 bg-gradient-to-r from-violet-600 to-purple-600"
+              >
+                Continue to Onboarding
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

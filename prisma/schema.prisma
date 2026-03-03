@@ -1,0 +1,519 @@
+// TestQuest AI - Database Schema
+// Free-tier optimized for Supabase Postgres
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER & AUTH ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatar        String?
+  role          UserRole  @default(LEARNER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastActiveAt  DateTime  @default(now())
+
+  // Relations
+  profile       UserProfile?
+  preferences   UserPreferences?
+  submissions   Submission[]
+  dailyMissions DailyMission[]
+  progress      UserProgress[]
+  trackProgress UserTrackProgress[]
+  xpLogs        XpLog[]
+  streaks       Streak[]
+  badges        UserBadge[]
+  recommendations Recommendation[]
+  adminLogs     AdminAuditLog[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Onboarding data
+  goal        String?  // e.g., "become_sdet", "switch_to_automation"
+  level       Level    @default(BEGINNER)
+  dailyMinutes Int     @default(30)
+  
+  // Gamification
+  totalXp     Int      @default(0)
+  currentLevel Int     @default(1)
+  currentStreakId String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+model UserPreferences {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Selected tracks (JSON array of track IDs)
+  selectedTracks  String[] // track IDs
+  
+  // Notification preferences
+  emailReminders  Boolean  @default(false)
+  streakAlerts    Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("user_preferences")
+}
+
+// ==================== LEARNING CONTENT ====================
+
+model Track {
+  id          String   @id @default(cuid())
+  slug        String   @unique // e.g., "python-for-testers"
+  name        String
+  description String
+  icon        String?  // Lucide icon name or URL
+  color       String   // Tailwind color class
+  order       Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  modules     Module[]
+  tasks       Task[]
+
+  @@map("tracks")
+}
+
+model Module {
+  id          String   @id @default(cuid())
+  trackId     String
+  track       Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  
+  slug        String
+  name        String
+  description String
+  order       Int      @default(0)
+  isPublished Boolean  @default(false)
+  
+  // Boss challenge at end of module
+  hasBossChallenge Boolean @default(false)
+  bossChallengeDescription String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tasks       Task[]
+
+  @@unique([trackId, slug])
+  @@map("modules")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  trackId     String
+  track       Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  
+  type        TaskType
+  difficulty  Difficulty @default(EASY)
+  
+  // Content
+  title       String
+  prompt      String   @db.Text
+  codeSnippet String?  @db.Text // For code completion tasks
+  
+  // Task configuration
+  estimatedMinutes Int @default(5)
+  tags        String[] // e.g., ["playwright", "locators", "assertions"]
+  
+  // Answer & Evaluation
+  expectedAnswer  String  @db.Text // MCQ: option id, Text: keywords/pattern
+  explanation     String  @db.Text // Detailed explanation
+  hint            String? @db.Text
+  commonMistakes  String? @db.Text // Why wrong answers fail
+  
+  // For MCQ tasks
+  options     TaskOption[]
+  
+  // Metadata
+  isPublished Boolean @default(false)
+  createdBy   String? // Admin user ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  submissions Submission[]
+  dailyTasks  DailyTask[]
+
+  @@map("tasks")
+}
+
+model TaskOption {
+  id      String @id @default(cuid())
+  taskId  String
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  optionId String // A, B, C, D or custom
+  text    String
+  isCorrect Boolean @default(false)
+  
+  @@map("task_options")
+}
+
+// ==================== DAILY MISSIONS ====================
+
+model DailyMission {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @db.Date // Mission date
+  status      MissionStatus @default(ACTIVE)
+  
+  totalXp     Int      @default(0)
+  completedTasks Int  @default(0)
+  totalTasks  Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tasks       DailyTask[]
+
+  @@unique([userId, date])
+  @@map("daily_missions")
+}
+
+model DailyTask {
+  id          String   @id @default(cuid())
+  missionId   String
+  mission     DailyMission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id])
+  
+  order       Int      @default(0)
+  status      DailyTaskStatus @default(PENDING)
+  
+  submissionId String?
+
+  @@map("daily_tasks")
+}
+
+// ==================== SUBMISSIONS & EVALUATION ====================
+
+model Submission {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id])
+  
+  // Answer
+  answer      String   @db.Text
+  
+  // Evaluation
+  result      SubmissionResult
+  score       Int      // 0-100
+  feedback    String?  @db.Text // Auto-generated or stored
+  
+  // XP earned
+  xpEarned    Int      @default(0)
+  
+  // Timestamps
+  startedAt   DateTime @default(now())
+  submittedAt DateTime @default(now())
+  timeSpentSeconds Int? // Calculated
+
+  // Relations
+  dailyTask   DailyTask?
+
+  @@map("submissions")
+}
+
+// ==================== PROGRESS & GAMIFICATION ====================
+
+model UserProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Topic-level progress (can be track, module, or tag)
+  entityType  ProgressEntityType
+  entityId    String   // trackId, moduleId, or tag name
+  entityName  String   // Denormalized for display
+  
+  // Stats
+  totalTasks      Int @default(0)
+  completedTasks  Int @default(0)
+  correctAnswers  Int @default(0)
+  accuracy        Float @default(0) // 0-100
+  
+  // Mastery level (0-100)
+  masteryScore    Int @default(0)
+  
+  // Weak topic flag
+  isWeakArea      Boolean @default(false)
+  
+  lastPracticedAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, entityType, entityId])
+  @@map("user_progress")
+}
+
+model UserTrackProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackId     String
+  
+  // Progress
+  completedModules String[] // module IDs
+  completedTasks   Int @default(0)
+  totalTasks       Int @default(0)
+  percentComplete  Float @default(0)
+  
+  // Current position
+  currentModuleId  String?
+  
+  isCompleted      Boolean @default(false)
+  completedAt      DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, trackId])
+  @@map("user_track_progress")
+}
+
+model Streak {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  currentStreak   Int @default(0)
+  longestStreak   Int @default(0)
+  
+  lastActivityDate DateTime? @db.Date
+  
+  // History for calendar view
+  history     StreakDay[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("streaks")
+}
+
+model StreakDay {
+  id          String   @id @default(cuid())
+  streakId    String
+  streak      Streak   @relation(fields: [streakId], references: [id], onDelete: Cascade)
+  
+  date        DateTime @db.Date
+  completed   Boolean  @default(false)
+  xpEarned    Int      @default(0)
+  
+  @@unique([streakId, date])
+  @@map("streak_days")
+}
+
+model XpLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  amount      Int
+  reason      XpReason
+  sourceId    String?  // taskId, badgeId, etc.
+  sourceType  String?  // "task", "badge", "streak", etc.
+  
+  createdAt   DateTime @default(now())
+
+  @@map("xp_logs")
+}
+
+model Badge {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String
+  icon        String   // Lucide icon name
+  color       String   // Tailwind color
+  
+  // Requirements
+  requirementType BadgeRequirementType
+  requirementValue Int // e.g., 7 days, 100 XP, etc.
+  
+  createdAt   DateTime @default(now())
+
+  // Relations
+  users       UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId     String
+  badge       Badge    @relation(fields: [badgeId], references: [id])
+  
+  unlockedAt  DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model Recommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type        RecommendationType
+  title       String
+  description String
+  
+  // Related content
+  trackId     String?
+  moduleId    String?
+  tags        String[]
+  
+  // Priority (higher = more important)
+  priority    Int      @default(0)
+  
+  // Status
+  isRead      Boolean  @default(false)
+  isActedUpon Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@map("recommendations")
+}
+
+// ==================== ADMIN ====================
+
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminId     String
+  admin       User     @relation(fields: [adminId], references: [id])
+  
+  action      AdminAction
+  entityType  String   // "track", "task", etc.
+  entityId    String
+  changes     Json?    // Before/after snapshot
+  
+  createdAt   DateTime @default(now())
+
+  @@map("admin_audit_logs")
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  LEARNER
+  ADMIN
+  CONTENT_MANAGER
+}
+
+enum Level {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum TaskType {
+  MCQ
+  TRUE_FALSE
+  FILL_IN_BLANK
+  SHORT_ANSWER
+  CODE_COMPLETION
+  DEBUGGING
+  OUTPUT_PREDICTION
+  SCENARIO_BASED
+  ORDERING
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum MissionStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+enum DailyTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum SubmissionResult {
+  CORRECT
+  PARTIAL
+  INCORRECT
+}
+
+enum ProgressEntityType {
+  TRACK
+  MODULE
+  TOPIC
+}
+
+enum XpReason {
+  TASK_CORRECT
+  TASK_PARTIAL
+  STREAK_BONUS
+  BADGE_UNLOCK
+  LEVEL_UP
+  DAILY_BONUS
+}
+
+enum BadgeRequirementType {
+  STREAK_DAYS
+  TOTAL_XP
+  TASKS_COMPLETED
+  TRACK_COMPLETED
+  PERFECT_DAY
+}
+
+enum RecommendationType {
+  WEAK_AREA
+  CONTINUE_TRACK
+  DAILY_MISSION
+  REVISION
+  NEW_CONTENT
+}
+
+enum AdminAction {
+  CREATE
+  UPDATE
+  DELETE
+  PUBLISH
+  UNPUBLISH
+}

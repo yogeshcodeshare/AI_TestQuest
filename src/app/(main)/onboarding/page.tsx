@@ -20,7 +20,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { Level, GOALS, DAILY_MINUTES_OPTIONS, LEVELS } from '@/lib/constants'
+import { Level } from '@prisma/client'
+import { GOALS, DAILY_MINUTES_OPTIONS, LEVELS } from '@/lib/constants'
 
 const TRACKS = [
   { id: 'python', name: 'Python for Testers', icon: Code, color: 'bg-blue-500', description: 'Learn Python scripting for test automation' },

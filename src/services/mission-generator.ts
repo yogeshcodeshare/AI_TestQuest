@@ -124,7 +124,7 @@ async function fetchDiverseTasks(
     where: { userId },
     select: { taskId: true },
     take: 100,
-    orderBy: { createdAt: 'desc' },
+    orderBy: { submittedAt: 'desc' },
   })
 
   const recentTaskIds = new Set(recentSubmissions.map(s => s.taskId))

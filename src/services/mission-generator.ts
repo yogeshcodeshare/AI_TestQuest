@@ -22,7 +22,14 @@ export async function generateDailyMission(userId: string, config: MissionConfig
     },
     include: {
       tasks: {
-        include: { task: true },
+        include: {
+          task: {
+            include: {
+              track: true,
+              options: true,
+            },
+          },
+        },
         orderBy: { order: 'asc' },
       },
     },
@@ -92,6 +99,7 @@ export async function generateDailyMission(userId: string, config: MissionConfig
           task: {
             include: {
               track: true,
+              options: true,
             },
           },
         },

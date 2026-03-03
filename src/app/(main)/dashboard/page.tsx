@@ -101,7 +101,21 @@ async function getTrackProgress(userId: string) {
 }
 
 export default async function DashboardPage() {
-  const userData = await getUserData()
+  let userData
+  try {
+    userData = await getUserData()
+  } catch (error: any) {
+    if (error?.message?.includes('Missing Supabase')) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+          <h1 className="text-2xl font-bold text-red-600">Configuration Error</h1>
+          <p className="text-muted-foreground">{error.message}</p>
+          <p className="text-sm text-muted-foreground">Please check your environment variables in Vercel.</p>
+        </div>
+      )
+    }
+    throw error
+  }
 
   if (!userData) {
     redirect('/login')
